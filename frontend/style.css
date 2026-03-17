@@ -601,6 +601,221 @@ main { flex: 1; }
 .footer-nav a:hover { color: rgba(255,255,255,.8); }
 
 /* ============================================================
+   ADMIN PANEL
+   ============================================================ */
+.admin-section {
+  padding: 28px 0 0;
+}
+
+/* details/summary — аккордеон */
+.admin-panel {
+  background: var(--clr-surface);
+  border: 2px solid var(--clr-border);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+  transition: border-color var(--transition);
+}
+.admin-panel[open] {
+  border-color: var(--clr-accent);
+}
+
+.admin-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 24px;
+  cursor: pointer;
+  font-family: var(--font-cond);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--clr-muted);
+  background: var(--clr-bg);
+  user-select: none;
+  list-style: none;          /* убрать дефолтный маркер */
+  transition: color var(--transition), background var(--transition);
+}
+.admin-toggle::-webkit-details-marker { display: none; }
+.admin-toggle:hover { color: var(--clr-accent); background: #eff6ff; }
+.admin-panel[open] .admin-toggle { color: var(--clr-accent); background: #eff6ff; }
+
+.admin-toggle svg { flex-shrink: 0; }
+
+.admin-toggle-arrow {
+  margin-left: auto;
+  font-size: 1.1rem;
+  transition: transform var(--transition);
+  display: inline-block;
+}
+.admin-panel[open] .admin-toggle-arrow { transform: rotate(180deg); }
+
+/* body */
+.admin-body {
+  padding: 28px 32px 32px;
+  border-top: 1px solid var(--clr-border);
+}
+
+.admin-title {
+  font-family: var(--font-cond);
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--clr-dark);
+  margin-bottom: 4px;
+}
+.admin-subtitle {
+  font-size: .88rem;
+  color: var(--clr-muted);
+  margin-bottom: 24px;
+}
+
+/* form layout */
+.admin-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px 20px;
+  align-items: end;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-label {
+  font-size: .8rem;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--clr-muted);
+}
+
+.form-input {
+  height: 46px;
+  padding: 0 14px;
+  border: 1.5px solid var(--clr-border);
+  border-radius: 8px;
+  font-family: var(--font-main);
+  font-size: .97rem;
+  color: var(--clr-text);
+  background: var(--clr-bg);
+  outline: none;
+  transition: border-color var(--transition), box-shadow var(--transition), background var(--transition);
+}
+.form-input::placeholder { color: #94a3b8; }
+.form-input:focus {
+  border-color: var(--clr-accent);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+}
+.form-input.input-error {
+  border-color: #dc2626;
+  box-shadow: 0 0 0 3px rgba(220,38,38,.1);
+}
+
+/* actions row — spans full width */
+.form-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 4px;
+}
+
+.btn-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 28px;
+  background: var(--clr-accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-family: var(--font-main);
+  font-size: .97rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--transition), transform .12s, box-shadow var(--transition);
+  white-space: nowrap;
+}
+.btn-add:hover  { background: var(--clr-accent-h); box-shadow: 0 4px 14px rgba(37,99,235,.35); }
+.btn-add:active { transform: scale(.97); }
+.btn-add:disabled { background: #94a3b8; cursor: not-allowed; box-shadow: none; transform: none; }
+
+/* status message */
+.form-status {
+  font-size: .9rem;
+  font-weight: 600;
+  min-height: 1.2em;
+  transition: opacity .2s;
+}
+.form-status.ok  { color: #16a34a; }
+.form-status.err { color: #dc2626; }
+
+/* ============================================================
+   SKELETON LOADER
+   ============================================================ */
+.skeleton-card { pointer-events: none; }
+
+.skeleton-pulse {
+  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background-size: 200% 100%;
+  animation: skeletonSweep 1.4s ease infinite;
+}
+.skeleton-line {
+  display: block;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background-size: 200% 100%;
+  animation: skeletonSweep 1.4s ease infinite;
+}
+@keyframes skeletonSweep {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ============================================================
+   API ERROR BLOCK
+   ============================================================ */
+.api-error {
+  grid-column: 1 / -1;   /* растянуть на всю ширину грида */
+  text-align: center;
+  padding: 60px 24px;
+  background: var(--clr-surface);
+  border: 1px solid #fecaca;
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+.api-error-icon  { font-size: 2.8rem; margin-bottom: 12px; }
+.api-error-title {
+  font-family: var(--font-cond);
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #dc2626;
+  margin-bottom: 10px;
+}
+.api-error-text {
+  font-size: .92rem;
+  color: var(--clr-muted);
+  line-height: 1.7;
+  margin-bottom: 20px;
+}
+.api-error-text code {
+  font-size: .85rem;
+  background: #f1f5f9;
+  border: 1px solid var(--clr-border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  color: var(--clr-dark);
+  word-break: break-all;
+}
+
+/* ============================================================
    RESPONSIVE
    ============================================================ */
 @media (max-width: 768px) {
@@ -612,6 +827,9 @@ main { flex: 1; }
   .search-input-wrap { border-radius: 10px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,.3); }
   .search-input { height: 52px; }
   .btn-search   { height: 52px; border-radius: 10px; box-shadow: 0 4px 16px rgba(37,99,235,.4); }
+
+  .admin-form  { grid-template-columns: 1fr; }
+  .admin-body  { padding: 20px; }
 
   .about-grid  { grid-template-columns: 1fr; gap: 32px; }
   .about-stats { grid-template-columns: repeat(3, 1fr); }

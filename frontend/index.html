@@ -72,6 +72,67 @@
       </div>
     </section>
 
+    <!-- ========== ADMIN PANEL ========== -->
+    <section class="admin-section" id="admin">
+      <div class="container">
+        <details class="admin-panel" id="adminPanel">
+          <summary class="admin-toggle">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            Панель администратора
+            <span class="admin-toggle-arrow">▾</span>
+          </summary>
+
+          <div class="admin-body">
+            <h2 class="admin-title">Добавить новую запчасть</h2>
+            <p class="admin-subtitle">Заполните поля — товар сразу появится в каталоге.</p>
+
+            <div class="admin-form" id="adminForm">
+              <div class="form-group">
+                <label class="form-label" for="newName">Название</label>
+                <input
+                  type="text"
+                  id="newName"
+                  class="form-input"
+                  placeholder="например: Масляный фильтр MANN OC90"
+                  autocomplete="off"
+                />
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="newArticle">Артикул</label>
+                <input
+                  type="text"
+                  id="newArticle"
+                  class="form-input"
+                  placeholder="например: OC90"
+                  autocomplete="off"
+                />
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="newPrice">Цена (₽)</label>
+                <input
+                  type="number"
+                  id="newPrice"
+                  class="form-input"
+                  placeholder="например: 1500"
+                  min="0"
+                />
+              </div>
+
+              <div class="form-actions">
+                <button class="btn-add" id="addBtn">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  Сохранить в базу
+                </button>
+                <span class="form-status" id="formStatus" aria-live="polite"></span>
+              </div>
+            </div>
+          </div>
+        </details>
+      </div>
+    </section>
+
     <!-- ========== PRODUCT GRID ========== -->
     <section class="catalog-section" id="catalog">
       <div class="container">
