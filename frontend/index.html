@@ -6,68 +6,146 @@
   <title>AutoPartStore — Запчасти онлайн</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
+  <!-- ========== TOP BAR ========== -->
+  <div class="topbar">
+    <div class="container topbar-inner">
+      <span>🚗 Доставка по всей России · от 1 дня</span>
+      <span>Пн–Вс 8:00–22:00 · <a href="#">8-800-000-00-00</a></span>
+    </div>
+  </div>
+
   <!-- ========== HEADER ========== -->
-  <header class="site-header">
+  <header class="site-header" id="siteHeader">
     <div class="container header-inner">
-      <a href="#" class="logo">
-        Auto<span class="logo-accent">Part</span><span class="logo-store">Store</span>
+
+      <!-- Logo -->
+      <a href="#" class="logo" aria-label="AutoPartStore — на главную">
+        <span class="logo-icon">⚙</span>
+        <span class="logo-text">Auto<span class="logo-blue">Part</span>Store</span>
       </a>
+
+      <!-- Search (центральный блок) -->
+      <div class="header-search" role="search">
+        <div class="search-input-wrap">
+          <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input
+            type="text"
+            id="searchInput"
+            class="search-input"
+            placeholder="Поиск по названию или артикулу…"
+            autocomplete="off"
+          />
+        </div>
+        <button class="btn-search" id="searchBtn">Найти</button>
+      </div>
+
+      <!-- Nav -->
       <nav class="site-nav">
-        <a href="#catalog" class="nav-link">Каталог</a>
+        <a href="#catalog" class="nav-link">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+            <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+          </svg>
+          Каталог
+        </a>
         <a href="#about" class="nav-link">О нас</a>
-        <a href="#" class="nav-link nav-btn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-          Вход
+        <a href="#admin" class="nav-link nav-link-admin">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+          </svg>
+          Админ
+        </a>
+        <a href="#" class="nav-link nav-btn-user">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+          </svg>
+          Войти
         </a>
       </nav>
+
       <button class="burger" id="burger" aria-label="Открыть меню">
         <span></span><span></span><span></span>
       </button>
+    </div>
+
+    <!-- Быстрые теги под строкой поиска -->
+    <div class="header-tags container">
+      <span class="tag-label">Популярное:</span>
+      <button class="quick-tag" data-q="OC90">OC90</button>
+      <button class="quick-tag" data-q="BRK-44">BRK-44</button>
+      <button class="quick-tag" data-q="SF-201">SF-201</button>
+      <button class="quick-tag" data-q="WT-8">WT-8</button>
+      <button class="quick-tag" data-q="фильтр">Фильтры</button>
+      <button class="quick-tag" data-q="тормоз">Тормоза</button>
     </div>
   </header>
 
   <!-- ========== MOBILE NAV ========== -->
   <div class="mobile-nav" id="mobileNav">
+    <div class="mobile-search">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+      </svg>
+      <input type="text" placeholder="Поиск…" class="mobile-search-input" id="mobileSearchInput"/>
+    </div>
     <a href="#catalog" class="mobile-nav-link">Каталог</a>
-    <a href="#about" class="mobile-nav-link">О нас</a>
-    <a href="#" class="mobile-nav-link">Вход</a>
+    <a href="#about"   class="mobile-nav-link">О нас</a>
+    <a href="#admin"   class="mobile-nav-link">Админ-панель</a>
+    <a href="#"        class="mobile-nav-link">Войти</a>
   </div>
 
   <main>
 
-    <!-- ========== SEARCH SECTION ========== -->
-    <section class="search-section">
-      <div class="search-bg-lines" aria-hidden="true">
-        <div class="bg-line"></div><div class="bg-line"></div>
-        <div class="bg-line"></div><div class="bg-line"></div>
-      </div>
-      <div class="container search-inner">
-        <p class="search-eyebrow">Склад · 12 000+ позиций</p>
-        <h1 class="search-title">Найди нужную<br><span class="search-title-accent">деталь</span> за секунды</h1>
-        <div class="search-box" role="search">
-          <div class="search-input-wrap">
-            <svg class="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-            <input
-              type="text"
-              id="searchInput"
-              class="search-input"
-              placeholder="Введите артикул (например, OC90)..."
-              autocomplete="off"
-            />
-          </div>
-          <button class="btn-search" id="searchBtn">Найти</button>
+    <!-- ========== HERO BANNER ========== -->
+    <section class="hero">
+      <div class="container hero-inner">
+        <div class="hero-text">
+          <p class="hero-eyebrow">12 000+ оригинальных запчастей в наличии</p>
+          <h1 class="hero-title">Детали для любого<br>автомобиля</h1>
+          <p class="hero-sub">Быстрая доставка · Гарантия качества · Лучшие цены</p>
+          <a href="#catalog" class="btn-hero">Перейти в каталог</a>
         </div>
-        <div class="search-tags">
-          <span class="tag-label">Быстрый поиск:</span>
-          <button class="quick-tag" data-q="OC90">OC90</button>
-          <button class="quick-tag" data-q="BRK-44">BRK-44</button>
-          <button class="quick-tag" data-q="SF-201">SF-201</button>
-          <button class="quick-tag" data-q="WT-8">WT-8</button>
+        <div class="hero-illustration" aria-hidden="true">
+          <div class="hero-circle">
+            <span class="hero-emoji">🔧</span>
+          </div>
+          <div class="hero-badge hero-badge-1">OEM</div>
+          <div class="hero-badge hero-badge-2">−30%</div>
+          <div class="hero-badge hero-badge-3">✓ Гарантия</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== ADVANTAGES ========== -->
+    <section class="advantages">
+      <div class="container advantages-grid">
+        <div class="adv-item">
+          <span class="adv-icon">🚚</span>
+          <strong>Быстрая доставка</strong>
+          <span>1–3 дня по России</span>
+        </div>
+        <div class="adv-item">
+          <span class="adv-icon">✅</span>
+          <strong>Гарантия</strong>
+          <span>12 месяцев на все товары</span>
+        </div>
+        <div class="adv-item">
+          <span class="adv-icon">💳</span>
+          <strong>Оплата</strong>
+          <span>Любым удобным способом</span>
+        </div>
+        <div class="adv-item">
+          <span class="adv-icon">🔁</span>
+          <strong>Возврат</strong>
+          <span>14 дней без вопросов</span>
         </div>
       </div>
     </section>
@@ -77,52 +155,46 @@
       <div class="container">
         <details class="admin-panel" id="adminPanel">
           <summary class="admin-toggle">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+            </svg>
             Панель администратора
-            <span class="admin-toggle-arrow">▾</span>
+            <span class="admin-toggle-arrow">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </span>
           </summary>
 
           <div class="admin-body">
-            <h2 class="admin-title">Добавить новую запчасть</h2>
-            <p class="admin-subtitle">Заполните поля — товар сразу появится в каталоге.</p>
+            <div class="admin-header">
+              <div>
+                <h2 class="admin-title">Добавить товар</h2>
+                <p class="admin-subtitle">Новая позиция появится в каталоге мгновенно.</p>
+              </div>
+            </div>
 
             <div class="admin-form" id="adminForm">
               <div class="form-group">
                 <label class="form-label" for="newName">Название</label>
-                <input
-                  type="text"
-                  id="newName"
-                  class="form-input"
-                  placeholder="например: Масляный фильтр MANN OC90"
-                  autocomplete="off"
-                />
+                <input type="text" id="newName" class="form-input"
+                  placeholder="Масляный фильтр MANN OC90" autocomplete="off"/>
               </div>
-
               <div class="form-group">
                 <label class="form-label" for="newArticle">Артикул</label>
-                <input
-                  type="text"
-                  id="newArticle"
-                  class="form-input"
-                  placeholder="например: OC90"
-                  autocomplete="off"
-                />
+                <input type="text" id="newArticle" class="form-input"
+                  placeholder="OC90" autocomplete="off"/>
               </div>
-
               <div class="form-group">
-                <label class="form-label" for="newPrice">Цена (₽)</label>
-                <input
-                  type="number"
-                  id="newPrice"
-                  class="form-input"
-                  placeholder="например: 1500"
-                  min="0"
-                />
+                <label class="form-label" for="newPrice">Цена, ₽</label>
+                <input type="number" id="newPrice" class="form-input"
+                  placeholder="1500" min="0"/>
               </div>
-
               <div class="form-actions">
                 <button class="btn-add" id="addBtn">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                  </svg>
                   Сохранить в базу
                 </button>
                 <span class="form-status" id="formStatus" aria-live="polite"></span>
@@ -133,19 +205,21 @@
       </div>
     </section>
 
-    <!-- ========== PRODUCT GRID ========== -->
+    <!-- ========== CATALOG ========== -->
     <section class="catalog-section" id="catalog">
       <div class="container">
         <div class="section-header">
           <h2 class="section-title">Каталог запчастей</h2>
           <span class="results-count" id="resultsCount">Показано товаров: <strong>0</strong></span>
         </div>
+
         <div class="product-grid" id="productGrid">
-          <!-- карточки вставляются через JS -->
+          <!-- карточки рендерятся через JS -->
         </div>
+
         <div class="no-results hidden" id="noResults">
           <div class="no-results-icon">🔍</div>
-          <p>По запросу ничего не найдено.</p>
+          <p>Ничего не найдено по вашему запросу.</p>
           <button class="btn-reset" id="resetBtn">Сбросить поиск</button>
         </div>
       </div>
@@ -155,13 +229,28 @@
     <section class="about-section" id="about">
       <div class="container about-grid">
         <div class="about-text">
-          <h2 class="section-title">О нас</h2>
-          <p>AutoPartStore — поставщик оригинальных и аналоговых автозапчастей с 2009 года. Мы работаем с сотнями марок автомобилей и гарантируем быструю доставку по всей стране.</p>
+          <p class="about-eyebrow">О компании</p>
+          <h2 class="about-title">AutoPartStore</h2>
+          <p class="about-desc">Поставщик оригинальных и аналоговых автозапчастей с 2009 года. Работаем с сотнями марок автомобилей и гарантируем быструю доставку по всей стране.</p>
+          <a href="#catalog" class="btn-about">Смотреть каталог →</a>
         </div>
         <div class="about-stats">
-          <div class="stat"><strong>15+</strong><span>лет на рынке</span></div>
-          <div class="stat"><strong>12к+</strong><span>позиций в наличии</span></div>
-          <div class="stat"><strong>24ч</strong><span>доставка по городу</span></div>
+          <div class="stat">
+            <strong>15+</strong>
+            <span>лет на рынке</span>
+          </div>
+          <div class="stat">
+            <strong>12к+</strong>
+            <span>позиций</span>
+          </div>
+          <div class="stat">
+            <strong>24ч</strong>
+            <span>доставка</span>
+          </div>
+          <div class="stat">
+            <strong>98%</strong>
+            <span>довольных клиентов</span>
+          </div>
         </div>
       </div>
     </section>
@@ -170,12 +259,38 @@
 
   <!-- ========== FOOTER ========== -->
   <footer class="site-footer">
-    <div class="container footer-inner">
-      <span class="footer-copy">© 2025 Auto<span class="logo-accent">Part</span>Store. Все права защищены.</span>
+    <div class="container footer-top">
+      <div class="footer-brand">
+        <a href="#" class="logo logo-sm">
+          <span class="logo-icon">⚙</span>
+          <span class="logo-text">Auto<span class="logo-blue">Part</span>Store</span>
+        </a>
+        <p>Ваш надёжный поставщик автозапчастей с 2009 года.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Покупателям</h4>
+        <a href="#">Как сделать заказ</a>
+        <a href="#">Доставка и оплата</a>
+        <a href="#">Возврат товара</a>
+      </div>
+      <div class="footer-col">
+        <h4>Компания</h4>
+        <a href="#about">О нас</a>
+        <a href="#">Контакты</a>
+        <a href="#">Вакансии</a>
+      </div>
+      <div class="footer-col">
+        <h4>Поддержка</h4>
+        <a href="#">8-800-000-00-00</a>
+        <a href="#">info@autopartstore.ru</a>
+        <a href="#">Пн–Вс 8:00–22:00</a>
+      </div>
+    </div>
+    <div class="footer-bottom container">
+      <span>© 2025 AutoPartStore. Все права защищены.</span>
       <nav class="footer-nav">
         <a href="#">Политика конфиденциальности</a>
         <a href="#">Условия использования</a>
-        <a href="#">Контакты</a>
       </nav>
     </div>
   </footer>
