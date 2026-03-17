@@ -9,13 +9,11 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// hashPassword возвращает hex-строку SHA-256 от пароля.
 func hashPassword(password string) string {
 	sum := sha256.Sum256([]byte(password))
 	return fmt.Sprintf("%x", sum)
 }
 
-// initDB открывает файл базы данных и возвращает соединение.
 func initDB() *sql.DB {
 	database, err := sql.Open("sqlite", "./shop.db")
 	if err != nil {
@@ -24,74 +22,67 @@ func initDB() *sql.DB {
 	return database
 }
 
-// prepareDB создаёт таблицы и засевает данными при первом запуске.
 func prepareDB() {
 	// ── Таблица запчастей ────────────────────────────────────────
-	createParts := `
+	_, err := db.Exec(`
 	CREATE TABLE IF NOT EXISTS parts (
 		id      INTEGER PRIMARY KEY AUTOINCREMENT,
 		name    TEXT    NOT NULL,
 		article TEXT    NOT NULL,
 		price   INTEGER NOT NULL DEFAULT 0
-	);`
-	if _, err := db.Exec(createParts); err != nil {
-		log.Fatal("prepareDB — не удалось создать таблицу parts:", err)
+	)`)
+	if err != nil {
+		log.Fatal("prepareDB — таблица parts:", err)
 	}
 
 	// ── Таблица пользователей ────────────────────────────────────
-	// Добавлены поля email и phone для входа по email/телефону.
-	// username оставлен для обратной совместимости и внутреннего использования.
-	// email и phone допускают NULL — не у всех пользователей могут быть оба.
-	createUsers := `
+	// name     — отображаемое имя (Иван Петров)
+	// email    — логин и контакт
+	// username — внутренний идентификатор (= email при регистрации)
+	_, err = db.Exec(`
 	CREATE TABLE IF NOT EXISTS users (
 		id            INTEGER PRIMARY KEY AUTOINCREMENT,
 		username      TEXT    NOT NULL UNIQUE,
+		name          TEXT    NOT NULL DEFAULT '',
 		email         TEXT    UNIQUE,
-		phone         TEXT    UNIQUE,
 		password_hash TEXT    NOT NULL,
-		role          TEXT    NOT NULL DEFAULT 'admin'
-	);`
-	if _, err := db.Exec(createUsers); err != nil {
-		log.Fatal("prepareDB — не удалось создать таблицу users:", err)
+		role          TEXT    NOT NULL DEFAULT 'user'
+	)`)
+	if err != nil {
+		log.Fatal("prepareDB — таблица users:", err)
 	}
 
-	// ── Миграция: добавляем колонки email и phone если их ещё нет ─
-	// Нужно при обновлении существующей БД без пересоздания таблицы.
-	migrations := []string{
+	// ── Миграции (добавляем колонки к старой БД если их нет) ─────
+	for _, m := range []string{
+		"ALTER TABLE users ADD COLUMN name  TEXT NOT NULL DEFAULT ''",
 		"ALTER TABLE users ADD COLUMN email TEXT UNIQUE",
-		"ALTER TABLE users ADD COLUMN phone TEXT UNIQUE",
-	}
-	for _, m := range migrations {
-		// Игнорируем ошибку — колонка уже существует, это нормально
-		db.Exec(m)
+	} {
+		db.Exec(m) // ошибка = колонка уже есть — игнорируем
 	}
 
-	// ── Первый администратор (если таблица users пустая) ─────────
-	var userCount int
-	db.QueryRow("SELECT COUNT(*) FROM users").Scan(&userCount)
-	if userCount == 0 {
-		_, err := db.Exec(
-			`INSERT INTO users (username, email, phone, password_hash, role)
+	// ── Первый администратор ──────────────────────────────────────
+	var n int
+	db.QueryRow("SELECT COUNT(*) FROM users").Scan(&n)
+	if n == 0 {
+		_, err = db.Exec(
+			`INSERT INTO users (username, name, email, password_hash, role)
 			 VALUES (?, ?, ?, ?, ?)`,
 			"admin",
-			"admin@autopartstore.ru", // email для входа
-			"+79000000000",           // телефон для входа
+			"Администратор",
+			"admin@autopartstore.ru",
 			hashPassword("admin123"),
 			"admin",
 		)
 		if err != nil {
-			log.Fatal("prepareDB — не удалось создать первого администратора:", err)
+			log.Fatal("prepareDB — создание admin:", err)
 		}
-		log.Println("prepareDB — создан администратор:")
-		log.Println("  email:    admin@autopartstore.ru")
-		log.Println("  телефон: +79000000000")
-		log.Println("  пароль:  admin123")
+		log.Println("prepareDB — создан администратор: admin@autopartstore.ru / admin123")
 	}
 
-	// ── Тестовые запчасти (если таблица parts пустая) ────────────
-	var partCount int
-	db.QueryRow("SELECT COUNT(*) FROM parts").Scan(&partCount)
-	if partCount > 0 {
+	// ── Тестовые запчасти ─────────────────────────────────────────
+	var p int
+	db.QueryRow("SELECT COUNT(*) FROM parts").Scan(&p)
+	if p > 0 {
 		return
 	}
 
@@ -105,17 +96,13 @@ func prepareDB() {
 		{0, "Ремень ГРМ Gates комплект с роликом", "TM-115", 5490},
 		{0, "Стойка переднего амортизатора Kayaba", "SH-202", 7200},
 	}
-
 	stmt, err := db.Prepare("INSERT INTO parts (name, article, price) VALUES (?, ?, ?)")
 	if err != nil {
-		log.Fatal("prepareDB — ошибка подготовки INSERT:", err)
+		log.Fatal("prepareDB — подготовка INSERT:", err)
 	}
 	defer stmt.Close()
-
-	for _, p := range seed {
-		if _, err := stmt.Exec(p.Name, p.Article, p.Price); err != nil {
-			log.Println("prepareDB — ошибка вставки тестовых данных:", err)
-		}
+	for _, v := range seed {
+		stmt.Exec(v.Name, v.Article, v.Price)
 	}
-	log.Println("prepareDB — тестовые данные загружены в БД")
+	log.Println("prepareDB — тестовые запчасти загружены")
 }

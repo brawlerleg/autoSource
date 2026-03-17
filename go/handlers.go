@@ -12,8 +12,22 @@ var allowedOrigins = map[string]bool{
 	"http://localhost:3000": true,
 	"http://localhost:5500": true, // Live Server (VS Code)
 	"http://127.0.0.1:5500": true,
+	"http://localhost:5501": true, // Live Server альтернативный порт
+	"http://127.0.0.1:5501": true,
 	"http://localhost:8080": true,
 	"http://127.0.0.1:8080": true,
+	"http://localhost:8000": true,
+	"http://127.0.0.1:8000": true,
+	// При открытии через file:// Origin будет пустым — обрабатывается ниже
+}
+
+// originIsAllowed возвращает true если origin разрешён.
+// Пустой origin (file://, curl, Postman) тоже считается разрешённым.
+func originIsAllowed(origin string) bool {
+	if origin == "" {
+		return true
+	}
+	return allowedOrigins[origin]
 }
 
 // setCORSHeaders устанавливает заголовки CORS.
@@ -29,24 +43,26 @@ var allowedOrigins = map[string]bool{
 func setCORSHeaders(w http.ResponseWriter, r *http.Request) {
 	origin := r.Header.Get("Origin")
 
-	if origin == "" || allowedOrigins[origin] {
-		// Запрос с разрешённого origin (или без origin — например, curl)
+	if originIsAllowed(origin) {
 		if origin != "" {
+			// Конкретный origin — браузер принимает вместе с Credentials
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 		} else {
-			// Без Origin (curl, Postman) — разрешаем всё
+			// Нет Origin (curl, Postman, file://) — wildcard безопасен
 			w.Header().Set("Access-Control-Allow-Origin", "*")
 		}
 	} else {
-		// Origin не в белом списке — CORS не разрешаем,
-		// но запрос всё равно дойдёт до обработчика (браузер заблокирует сам)
-		log.Printf("setCORSHeaders — неизвестный origin: %q", origin)
+		// Незнакомый origin — логируем, но всё равно отражаем
+		// (браузер сам заблокирует если не доверяет)
+		log.Printf("setCORSHeaders — незнакомый origin: %q", origin)
 		w.Header().Set("Access-Control-Allow-Origin", origin)
 	}
 
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
+	// Vary нужен чтобы браузер не кешировал ответ одного origin для другого
+	w.Header().Add("Vary", "Origin")
 }
 
 // ── authMiddleware ────────────────────────────────────────────

@@ -15,14 +15,15 @@ func main() {
 	prepareDB()
 
 	// ── Публичные маршруты ────────────────────────────────────
-	http.HandleFunc("/api/parts", getParts)              // GET  — каталог
-	http.HandleFunc("/api/login", loginHandler)          // POST — вход
-	http.HandleFunc("/api/logout", logoutHandler)        // POST — выход
-	http.HandleFunc("/api/check-auth", checkAuthHandler) // GET  — проверка сессии
-	http.HandleFunc("/api/register", registerHandler)    // POST — регистрация
+	http.HandleFunc("/api/parts", getParts)
+	http.HandleFunc("/api/login", loginHandler)
+	http.HandleFunc("/api/logout", logoutHandler)
+	http.HandleFunc("/api/check-auth", checkAuthHandler)
+	http.HandleFunc("/api/register", registerHandler)
+	http.HandleFunc("/api/me", meHandler) // GET — данные текущего юзера
 
-	// ── Защищённые маршруты (только авторизованные) ───────────
-	http.HandleFunc("/api/parts/add", authMiddleware(addPart)) // POST — добавить запчасть
+	// ── Защищённые маршруты ───────────────────────────────────
+	http.HandleFunc("/api/parts/add", authMiddleware(addPart))
 
 	log.Println("Сервер запущен на http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))

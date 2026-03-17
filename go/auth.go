@@ -14,8 +14,7 @@ import (
 const sessionDuration = 24 * time.Hour
 const cookieName = "session_token"
 
-// sessions — хранилище активных сессий в памяти.
-var sessions = map[string]string{}
+var sessions = map[string]string{} // token → username
 
 // ── Общие типы ────────────────────────────────────────────────
 
@@ -24,9 +23,6 @@ type loginResponse struct {
 	Message string `json:"message"`
 }
 
-// ── Вспомогательные функции ───────────────────────────────────
-
-// writeJSON пишет JSON-ответ с нужным статусом в одну строку.
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -83,20 +79,8 @@ func maskIdentifier(s string) string {
 
 // ── registerHandler — POST /api/register ─────────────────────
 //
-// Принимает JSON:
-//
-//	{
-//	  "email":    "user@example.com",
-//	  "phone":    "+79001234567",
-//	  "password": "secret123"
-//	}
-//
-// Коды ответа:
-//
-//	201 — пользователь создан
-//	400 — не заполнены обязательные поля
-//	409 — email или телефон уже заняты
-//	500 — ошибка БД
+// Принимает: { "name": "Иван", "email": "user@example.com", "password": "..." }
+// Возвращает: 201 при успехе, 400 при ошибке валидации, 409 если email занят.
 func registerHandler(w http.ResponseWriter, r *http.Request) {
 	setCORSHeaders(w, r)
 
@@ -109,135 +93,79 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ── Декодирование ─────────────────────────────────────────
 	var req struct {
+		Name     string `json:"name"`
 		Email    string `json:"email"`
-		Phone    string `json:"phone"`
 		Password string `json:"password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Println("registerHandler — ошибка декодирования JSON:", err)
 		writeJSON(w, http.StatusBadRequest,
 			loginResponse{OK: false, Message: "Некорректный JSON"})
 		return
 	}
 
-	// ── Клиентская валидация на сервере ───────────────────────
+	req.Name = strings.TrimSpace(req.Name)
 	req.Email = strings.TrimSpace(req.Email)
-	req.Phone = strings.TrimSpace(req.Phone)
 
-	if req.Email == "" && req.Phone == "" {
-		writeJSON(w, http.StatusBadRequest, loginResponse{
-			OK:      false,
-			Message: "Укажите email или номер телефона",
-		})
+	// Валидация
+	switch {
+	case req.Name == "":
+		writeJSON(w, http.StatusBadRequest,
+			loginResponse{OK: false, Message: "Укажите ваше имя"})
 		return
-	}
-	if req.Email != "" && !strings.Contains(req.Email, "@") {
-		writeJSON(w, http.StatusBadRequest, loginResponse{
-			OK:      false,
-			Message: "Некорректный формат email",
-		})
+	case req.Email == "":
+		writeJSON(w, http.StatusBadRequest,
+			loginResponse{OK: false, Message: "Укажите email"})
 		return
-	}
-	if len(req.Password) < 6 {
-		writeJSON(w, http.StatusBadRequest, loginResponse{
-			OK:      false,
-			Message: "Пароль должен быть не менее 6 символов",
-		})
+	case !strings.Contains(req.Email, "@"):
+		writeJSON(w, http.StatusBadRequest,
+			loginResponse{OK: false, Message: "Некорректный формат email"})
+		return
+	case len(req.Password) < 6:
+		writeJSON(w, http.StatusBadRequest,
+			loginResponse{OK: false, Message: "Пароль должен быть не менее 6 символов"})
 		return
 	}
 
-	// ── Проверка уникальности email ───────────────────────────
-	if req.Email != "" {
-		var existingID int
-		err := db.QueryRow(
-			"SELECT id FROM users WHERE email = ?", req.Email,
-		).Scan(&existingID)
-
-		if err == nil {
-			// Запись найдена — email занят
-			writeJSON(w, http.StatusConflict, loginResponse{
-				OK:      false,
-				Message: "Этот email уже зарегистрирован",
-			})
-			return
-		}
-		if !errors.Is(err, sql.ErrNoRows) {
-			log.Println("registerHandler — ошибка проверки email:", err)
-			writeJSON(w, http.StatusInternalServerError, loginResponse{
-				OK: false, Message: "Ошибка базы данных",
-			})
-			return
-		}
+	// Проверка уникальности email
+	var existingID int
+	err := db.QueryRow("SELECT id FROM users WHERE email = ?", req.Email).Scan(&existingID)
+	if err == nil {
+		writeJSON(w, http.StatusConflict,
+			loginResponse{OK: false, Message: "Этот email уже зарегистрирован"})
+		return
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		log.Println("registerHandler — проверка email:", err)
+		writeJSON(w, http.StatusInternalServerError,
+			loginResponse{OK: false, Message: "Ошибка базы данных"})
+		return
 	}
 
-	// ── Проверка уникальности телефона ────────────────────────
-	if req.Phone != "" {
-		var existingID int
-		err := db.QueryRow(
-			"SELECT id FROM users WHERE phone = ?", req.Phone,
-		).Scan(&existingID)
-
-		if err == nil {
-			writeJSON(w, http.StatusConflict, loginResponse{
-				OK:      false,
-				Message: "Этот номер телефона уже зарегистрирован",
-			})
-			return
-		}
-		if !errors.Is(err, sql.ErrNoRows) {
-			log.Println("registerHandler — ошибка проверки телефона:", err)
-			writeJSON(w, http.StatusInternalServerError, loginResponse{
-				OK: false, Message: "Ошибка базы данных",
-			})
-			return
-		}
-	}
-
-	// ── Формируем username из email или телефона ──────────────
-	// Username нужен для внутреннего использования и обратной совместимости.
-	username := req.Email
-	if username == "" {
-		username = req.Phone
-	}
-
-	// ── Сохранение в БД ───────────────────────────────────────
-	// email и phone могут быть NULL (передаём nil если пустые)
-	var emailVal, phoneVal any
-	if req.Email != "" {
-		emailVal = req.Email
-	}
-	if req.Phone != "" {
-		phoneVal = req.Phone
-	}
-
-	_, err := db.Exec(
-		`INSERT INTO users (username, email, phone, password_hash, role)
+	// Сохранение
+	_, err = db.Exec(
+		`INSERT INTO users (username, name, email, password_hash, role)
 		 VALUES (?, ?, ?, ?, ?)`,
-		username,
-		emailVal,
-		phoneVal,
-		hashPassword(req.Password), // SHA-256, никогда не храним пароль в открытом виде
-		"user",                     // новые пользователи — обычные, не админы
+		req.Email, // username = email (уникальный идентификатор)
+		req.Name,
+		req.Email,
+		hashPassword(req.Password),
+		"user",
 	)
 	if err != nil {
-		// UNIQUE constraint: теоретически могло появиться между двумя запросами
 		if strings.Contains(err.Error(), "UNIQUE") {
-			writeJSON(w, http.StatusConflict, loginResponse{
-				OK:      false,
-				Message: "Email или телефон уже зарегистрированы",
-			})
+			writeJSON(w, http.StatusConflict,
+				loginResponse{OK: false, Message: "Email уже зарегистрирован"})
 			return
 		}
-		log.Println("registerHandler — ошибка INSERT:", err)
-		writeJSON(w, http.StatusInternalServerError, loginResponse{
-			OK: false, Message: "Ошибка сохранения в базу данных",
-		})
+		log.Println("registerHandler — INSERT:", err)
+		writeJSON(w, http.StatusInternalServerError,
+			loginResponse{OK: false, Message: "Ошибка сохранения"})
 		return
 	}
 
-	log.Printf("registerHandler — новый пользователь: %s", maskIdentifier(username))
+	log.Printf("registerHandler — новый пользователь %q (%s)",
+		req.Name, maskIdentifier(req.Email))
 	writeJSON(w, http.StatusCreated,
 		loginResponse{OK: true, Message: "Аккаунт успешно создан"})
 }
@@ -246,7 +174,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 
 type loginRequest struct {
 	Identifier string `json:"identifier"`
-	Username   string `json:"username"` // устаревшее, поддерживается
+	Username   string `json:"username"` // устаревшее поле — поддерживается
 	Password   string `json:"password"`
 }
 
@@ -275,43 +203,34 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	identifier := strings.TrimSpace(req.Identifier)
-	password := req.Password
-
 	if identifier == "" {
-		writeJSON(w, http.StatusBadRequest, loginResponse{
-			OK: false, Message: "Введите email или номер телефона",
-		})
+		writeJSON(w, http.StatusBadRequest,
+			loginResponse{OK: false, Message: "Введите email"})
 		return
 	}
-	if password == "" {
-		writeJSON(w, http.StatusBadRequest, loginResponse{
-			OK: false, Message: "Введите пароль",
-		})
+	if req.Password == "" {
+		writeJSON(w, http.StatusBadRequest,
+			loginResponse{OK: false, Message: "Введите пароль"})
 		return
 	}
 
 	switch classifyIdentifier(identifier) {
 	case idEmail:
 		log.Printf("loginHandler — вход по email %s", maskIdentifier(identifier))
-	case idPhone:
-		log.Printf("loginHandler — вход по телефону %s", maskIdentifier(identifier))
 	default:
 		log.Printf("loginHandler — вход по username %s", maskIdentifier(identifier))
 	}
 
 	var storedHash, foundUsername string
 	err := db.QueryRow(
-		`SELECT username, password_hash
-		 FROM   users
-		 WHERE  email = ? OR phone = ? OR username = ?
-		 LIMIT  1`,
-		identifier, identifier, identifier,
+		`SELECT username, password_hash FROM users
+		 WHERE email = ? OR username = ? LIMIT 1`,
+		identifier, identifier,
 	).Scan(&foundUsername, &storedHash)
 
-	if err != nil || storedHash != hashPassword(password) {
-		writeJSON(w, http.StatusUnauthorized, loginResponse{
-			OK: false, Message: "Неверный email/телефон или пароль",
-		})
+	if err != nil || storedHash != hashPassword(req.Password) {
+		writeJSON(w, http.StatusUnauthorized,
+			loginResponse{OK: false, Message: "Неверный email или пароль"})
 		return
 	}
 
@@ -347,11 +266,8 @@ func logoutHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.SetCookie(w, &http.Cookie{
-		Name:    cookieName,
-		Value:   "",
-		Path:    "/",
-		Expires: time.Unix(0, 0),
-		MaxAge:  -1,
+		Name: cookieName, Value: "",
+		Path: "/", Expires: time.Unix(0, 0), MaxAge: -1,
 	})
 
 	json.NewEncoder(w).Encode(loginResponse{OK: true, Message: "Выход выполнен"})
@@ -373,9 +289,74 @@ func checkAuthHandler(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(loginResponse{OK: false})
 		return
 	}
-
 	_, valid := sessions[cookie.Value]
 	json.NewEncoder(w).Encode(loginResponse{OK: valid})
+}
+
+// ── meHandler — GET /api/me ───────────────────────────────────
+//
+// Возвращает данные текущего пользователя по session_token Cookie.
+// Ответ: { ok, name, email, role, displayName }
+func meHandler(w http.ResponseWriter, r *http.Request) {
+	setCORSHeaders(w, r)
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	cookie, err := r.Cookie(cookieName)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized,
+			loginResponse{OK: false, Message: "Не авторизован"})
+		return
+	}
+
+	username, ok := sessions[cookie.Value]
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized,
+			loginResponse{OK: false, Message: "Сессия истекла"})
+		return
+	}
+
+	// Читаем name, email, role из БД по username
+	var name, role string
+	var emailPtr *string
+
+	err = db.QueryRow(
+		"SELECT name, email, role FROM users WHERE username = ?", username,
+	).Scan(&name, &emailPtr, &role)
+
+	if err != nil {
+		log.Println("meHandler — запрос пользователя:", err)
+		writeJSON(w, http.StatusInternalServerError,
+			loginResponse{OK: false, Message: "Ошибка базы данных"})
+		return
+	}
+
+	email := ""
+	if emailPtr != nil {
+		email = *emailPtr
+	}
+
+	// displayName: имя > email > username
+	displayName := username
+	if name != "" {
+		displayName = name
+	} else if email != "" {
+		displayName = email
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]any{
+		"ok":          true,
+		"username":    username,
+		"name":        name,
+		"email":       email,
+		"role":        role,
+		"displayName": displayName,
+	})
 }
 
 // ── isAuthenticated ───────────────────────────────────────────
