@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AutoPartStore — Запчасти онлайн</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ========== HEADER ========== -->
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="#" class="logo">
+        Auto<span class="logo-accent">Part</span><span class="logo-store">Store</span>
+      </a>
+      <nav class="site-nav">
+        <a href="#catalog" class="nav-link">Каталог</a>
+        <a href="#about" class="nav-link">О нас</a>
+        <a href="#" class="nav-link nav-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          Вход
+        </a>
+      </nav>
+      <button class="burger" id="burger" aria-label="Открыть меню">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ========== MOBILE NAV ========== -->
+  <div class="mobile-nav" id="mobileNav">
+    <a href="#catalog" class="mobile-nav-link">Каталог</a>
+    <a href="#about" class="mobile-nav-link">О нас</a>
+    <a href="#" class="mobile-nav-link">Вход</a>
+  </div>
+
+  <main>
+
+    <!-- ========== SEARCH SECTION ========== -->
+    <section class="search-section">
+      <div class="search-bg-lines" aria-hidden="true">
+        <div class="bg-line"></div><div class="bg-line"></div>
+        <div class="bg-line"></div><div class="bg-line"></div>
+      </div>
+      <div class="container search-inner">
+        <p class="search-eyebrow">Склад · 12 000+ позиций</p>
+        <h1 class="search-title">Найди нужную<br><span class="search-title-accent">деталь</span> за секунды</h1>
+        <div class="search-box" role="search">
+          <div class="search-input-wrap">
+            <svg class="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input
+              type="text"
+              id="searchInput"
+              class="search-input"
+              placeholder="Введите артикул (например, OC90)..."
+              autocomplete="off"
+            />
+          </div>
+          <button class="btn-search" id="searchBtn">Найти</button>
+        </div>
+        <div class="search-tags">
+          <span class="tag-label">Быстрый поиск:</span>
+          <button class="quick-tag" data-q="OC90">OC90</button>
+          <button class="quick-tag" data-q="BRK-44">BRK-44</button>
+          <button class="quick-tag" data-q="SF-201">SF-201</button>
+          <button class="quick-tag" data-q="WT-8">WT-8</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== PRODUCT GRID ========== -->
+    <section class="catalog-section" id="catalog">
+      <div class="container">
+        <div class="section-header">
+          <h2 class="section-title">Каталог запчастей</h2>
+          <span class="results-count" id="resultsCount">Показано товаров: <strong>0</strong></span>
+        </div>
+        <div class="product-grid" id="productGrid">
+          <!-- карточки вставляются через JS -->
+        </div>
+        <div class="no-results hidden" id="noResults">
+          <div class="no-results-icon">🔍</div>
+          <p>По запросу ничего не найдено.</p>
+          <button class="btn-reset" id="resetBtn">Сбросить поиск</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== ABOUT ========== -->
+    <section class="about-section" id="about">
+      <div class="container about-grid">
+        <div class="about-text">
+          <h2 class="section-title">О нас</h2>
+          <p>AutoPartStore — поставщик оригинальных и аналоговых автозапчастей с 2009 года. Мы работаем с сотнями марок автомобилей и гарантируем быструю доставку по всей стране.</p>
+        </div>
+        <div class="about-stats">
+          <div class="stat"><strong>15+</strong><span>лет на рынке</span></div>
+          <div class="stat"><strong>12к+</strong><span>позиций в наличии</span></div>
+          <div class="stat"><strong>24ч</strong><span>доставка по городу</span></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ========== FOOTER ========== -->
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <span class="footer-copy">© 2025 Auto<span class="logo-accent">Part</span>Store. Все права защищены.</span>
+      <nav class="footer-nav">
+        <a href="#">Политика конфиденциальности</a>
+        <a href="#">Условия использования</a>
+        <a href="#">Контакты</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
