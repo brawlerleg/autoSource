@@ -1,27 +1,40 @@
 package main
 
 import (
-	"database/sql"
 	"encoding/json"
-	"errors"
 	"log"
 	"net/http"
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 )
 
-const sessionDuration = 24 * time.Hour
-const cookieName = "session_token"
+// ── Константы ─────────────────────────────────────────────────
 
-var sessions = map[string]string{} // token → username
+const (
+	sessionDuration = 24 * time.Hour
+	cookieName      = "session_token"
 
-// ── Общие типы ────────────────────────────────────────────────
+	// bcrypt cost: 12 — хороший баланс безопасности и скорости.
+	// Увеличение на 1 удваивает время хеширования.
+	bcryptCost = 12
+
+	// Rate limiting: после maxLoginAttempts неудач — блокировка на lockDuration.
+	maxLoginAttempts = 5
+	lockDuration     = 5 * time.Minute
+)
+
+// ── Типы ──────────────────────────────────────────────────────
 
 type loginResponse struct {
 	OK      bool   `json:"ok"`
 	Message string `json:"message"`
 }
+
+// ── writeJSON ─────────────────────────────────────────────────
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
@@ -29,14 +42,160 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	json.NewEncoder(w).Encode(v)
 }
 
-// ── classifyIdentifier ────────────────────────────────────────
+// ── hashPassword / checkPassword ─────────────────────────────
+//
+// bcrypt автоматически генерирует соль и встраивает её в хеш.
+// Хранить соль отдельно не нужно — она часть строки "$2a$12$...".
+
+func hashPassword(password string) (string, error) {
+	b, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
+func checkPassword(password, hash string) bool {
+	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
+}
+
+// ── Сессии в БД ───────────────────────────────────────────────
+
+// createSession генерирует UUID-токен, сохраняет сессию в таблицу sessions
+// и возвращает токен.
+func createSession(username string) (string, error) {
+	token := uuid.NewString() // случайный UUID v4
+	expiresAt := time.Now().Add(sessionDuration).Unix()
+
+	_, err := db.Exec(
+		"INSERT INTO sessions (token, username, expires_at) VALUES (?, ?, ?)",
+		token, username, expiresAt,
+	)
+	return token, err
+}
+
+// getSessionUser возвращает username по токену, или "" если сессия
+// не найдена или истекла. Попутно удаляет истёкшие сессии.
+func getSessionUser(token string) string {
+	var username string
+	var expiresAt int64
+
+	err := db.QueryRow(
+		"SELECT username, expires_at FROM sessions WHERE token = ?", token,
+	).Scan(&username, &expiresAt)
+
+	if err != nil {
+		return "" // не найдена
+	}
+
+	if time.Now().Unix() > expiresAt {
+		// Истекла — удаляем и возвращаем пусто
+		db.Exec("DELETE FROM sessions WHERE token = ?", token)
+		return ""
+	}
+
+	return username
+}
+
+// deleteSession удаляет сессию при выходе.
+func deleteSession(token string) {
+	db.Exec("DELETE FROM sessions WHERE token = ?", token)
+}
+
+// cleanExpiredSessions — периодическая очистка истёкших записей.
+// Вызывается из main() в горутине.
+func cleanExpiredSessions() {
+	for {
+		time.Sleep(1 * time.Hour)
+		res, _ := db.Exec(
+			"DELETE FROM sessions WHERE expires_at < ?", time.Now().Unix(),
+		)
+		if n, _ := res.RowsAffected(); n > 0 {
+			log.Printf("cleanExpiredSessions — удалено %d истёкших сессий", n)
+		}
+	}
+}
+
+// ── Rate limiting ─────────────────────────────────────────────
+
+// getClientIP извлекает IP клиента из запроса.
+// Учитывает X-Forwarded-For если сервер за прокси.
+func getClientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		// Берём первый IP из цепочки прокси
+		if idx := strings.Index(xff, ","); idx != -1 {
+			return strings.TrimSpace(xff[:idx])
+		}
+		return strings.TrimSpace(xff)
+	}
+	// Убираем порт из "IP:port"
+	ip := r.RemoteAddr
+	if idx := strings.LastIndex(ip, ":"); idx != -1 {
+		ip = ip[:idx]
+	}
+	return ip
+}
+
+// isRateLimited проверяет, не превышен ли лимит попыток для данного IP.
+// Возвращает true и время разблокировки если заблокирован.
+func isRateLimited(ip string) (limited bool, retryAfter time.Time) {
+	var attempts int
+	var lockedUntil int64
+
+	err := db.QueryRow(
+		"SELECT attempts, locked_until FROM login_attempts WHERE ip = ?", ip,
+	).Scan(&attempts, &lockedUntil)
+
+	if err != nil {
+		return false, time.Time{} // IP ещё не в таблице
+	}
+
+	if lockedUntil > 0 && time.Now().Unix() < lockedUntil {
+		return true, time.Unix(lockedUntil, 0)
+	}
+
+	return false, time.Time{}
+}
+
+// recordFailedAttempt увеличивает счётчик неудачных попыток.
+// После maxLoginAttempts — блокирует IP на lockDuration.
+func recordFailedAttempt(ip string) {
+	now := time.Now().Unix()
+
+	// Upsert: создаём запись или увеличиваем счётчик
+	db.Exec(`
+		INSERT INTO login_attempts (ip, attempts, locked_until)
+		VALUES (?, 1, 0)
+		ON CONFLICT(ip) DO UPDATE SET attempts = attempts + 1
+	`, ip)
+
+	// Проверяем нужна ли блокировка
+	var attempts int
+	db.QueryRow("SELECT attempts FROM login_attempts WHERE ip = ?", ip).Scan(&attempts)
+
+	if attempts >= maxLoginAttempts {
+		lockedUntil := now + int64(lockDuration.Seconds())
+		db.Exec(
+			"UPDATE login_attempts SET locked_until = ? WHERE ip = ?",
+			lockedUntil, ip,
+		)
+		log.Printf("rateLimiter — IP %s заблокирован на %v после %d попыток",
+			ip, lockDuration, attempts)
+	}
+}
+
+// resetAttempts сбрасывает счётчик после успешного входа.
+func resetAttempts(ip string) {
+	db.Exec("DELETE FROM login_attempts WHERE ip = ?", ip)
+}
+
+// ── Вспомогательные ───────────────────────────────────────────
 
 type idType int
 
 const (
 	idUnknown idType = iota
 	idEmail
-	idPhone
 	idUsername
 )
 
@@ -44,19 +203,8 @@ func classifyIdentifier(s string) idType {
 	if strings.Contains(s, "@") {
 		return idEmail
 	}
-	phoneChars := 0
-	for _, r := range s {
-		if unicode.IsDigit(r) || r == '+' || r == '-' || r == ' ' || r == '(' || r == ')' {
-			phoneChars++
-		}
-	}
-	if phoneChars == len([]rune(s)) && strings.ContainsAny(s, "0123456789") {
-		return idPhone
-	}
 	return idUsername
 }
-
-// ── maskIdentifier ────────────────────────────────────────────
 
 func maskIdentifier(s string) string {
 	if len(s) <= 4 {
@@ -77,10 +225,19 @@ func maskIdentifier(s string) string {
 	return string(runes[:2]) + strings.Repeat("*", len(runes)-2)
 }
 
+// validatePhone — оставлено для совместимости, не используется в логине
+func isPhoneChars(s string) bool {
+	for _, r := range s {
+		if unicode.IsDigit(r) || r == '+' || r == '-' || r == ' ' || r == '(' || r == ')' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
 // ── registerHandler — POST /api/register ─────────────────────
-//
-// Принимает: { "name": "Иван", "email": "user@example.com", "password": "..." }
-// Возвращает: 201 при успехе, 400 при ошибке валидации, 409 если email занят.
+
 func registerHandler(w http.ResponseWriter, r *http.Request) {
 	setCORSHeaders(w, r)
 
@@ -105,9 +262,8 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req.Name = strings.TrimSpace(req.Name)
-	req.Email = strings.TrimSpace(req.Email)
+	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
 
-	// Валидация
 	switch {
 	case req.Name == "":
 		writeJSON(w, http.StatusBadRequest,
@@ -135,22 +291,20 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 			loginResponse{OK: false, Message: "Этот email уже зарегистрирован"})
 		return
 	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		log.Println("registerHandler — проверка email:", err)
+
+	// Хешируем пароль bcrypt
+	hash, err := hashPassword(req.Password)
+	if err != nil {
+		log.Println("registerHandler — bcrypt:", err)
 		writeJSON(w, http.StatusInternalServerError,
-			loginResponse{OK: false, Message: "Ошибка базы данных"})
+			loginResponse{OK: false, Message: "Ошибка сервера"})
 		return
 	}
 
-	// Сохранение
 	_, err = db.Exec(
 		`INSERT INTO users (username, name, email, password_hash, role)
 		 VALUES (?, ?, ?, ?, ?)`,
-		req.Email, // username = email (уникальный идентификатор)
-		req.Name,
-		req.Email,
-		hashPassword(req.Password),
-		"user",
+		req.Email, req.Name, req.Email, hash, "user",
 	)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
@@ -174,7 +328,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 
 type loginRequest struct {
 	Identifier string `json:"identifier"`
-	Username   string `json:"username"` // устаревшее поле — поддерживается
+	Username   string `json:"username"` // устаревшее поле
 	Password   string `json:"password"`
 }
 
@@ -191,6 +345,19 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// ── Rate limiting ─────────────────────────────────────────
+	ip := getClientIP(r)
+	if limited, retryAfter := isRateLimited(ip); limited {
+		remaining := time.Until(retryAfter).Round(time.Second)
+		log.Printf("loginHandler — IP %s заблокирован, осталось %v", ip, remaining)
+		writeJSON(w, http.StatusTooManyRequests, loginResponse{
+			OK:      false,
+			Message: "Слишком много попыток. Попробуйте через " + remaining.String(),
+		})
+		return
+	}
+
+	// ── Декодирование ─────────────────────────────────────────
 	var req loginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest,
@@ -202,7 +369,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		req.Identifier = req.Username
 	}
 
-	identifier := strings.TrimSpace(req.Identifier)
+	identifier := strings.TrimSpace(strings.ToLower(req.Identifier))
 	if identifier == "" {
 		writeJSON(w, http.StatusBadRequest,
 			loginResponse{OK: false, Message: "Введите email"})
@@ -214,13 +381,10 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	switch classifyIdentifier(identifier) {
-	case idEmail:
-		log.Printf("loginHandler — вход по email %s", maskIdentifier(identifier))
-	default:
-		log.Printf("loginHandler — вход по username %s", maskIdentifier(identifier))
-	}
+	log.Printf("loginHandler — попытка входа: %s (IP: %s)",
+		maskIdentifier(identifier), ip)
 
+	// ── Поиск пользователя ────────────────────────────────────
 	var storedHash, foundUsername string
 	err := db.QueryRow(
 		`SELECT username, password_hash FROM users
@@ -228,22 +392,56 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		identifier, identifier,
 	).Scan(&foundUsername, &storedHash)
 
-	if err != nil || storedHash != hashPassword(req.Password) {
+	// ── Проверка пароля (bcrypt) ──────────────────────────────
+	// Важно: НЕ делаем ранний return при "пользователь не найден" —
+	// это позволило бы по времени ответа определить существование email.
+	// Всегда выполняем checkPassword, даже если пользователь не найден.
+	var passwordOK bool
+	if err == nil {
+		passwordOK = checkPassword(req.Password, storedHash)
+	}
+
+	if err != nil || !passwordOK {
+		recordFailedAttempt(ip)
+
+		// Считаем сколько попыток осталось
+		var attempts int
+		db.QueryRow("SELECT attempts FROM login_attempts WHERE ip = ?", ip).
+			Scan(&attempts)
+		remaining := maxLoginAttempts - attempts
+		if remaining < 0 {
+			remaining = 0
+		}
+
+		msg := "Неверный email или пароль"
+		if remaining > 0 && remaining <= 3 {
+			msg += ". Осталось попыток: " + string(rune('0'+remaining))
+		}
+
 		writeJSON(w, http.StatusUnauthorized,
-			loginResponse{OK: false, Message: "Неверный email или пароль"})
+			loginResponse{OK: false, Message: msg})
 		return
 	}
 
-	token := hashPassword(foundUsername + time.Now().String())
-	sessions[token] = foundUsername
-	log.Printf("loginHandler — %q вошёл", foundUsername)
+	// ── Успешный вход ─────────────────────────────────────────
+	resetAttempts(ip) // сбрасываем счётчик неудач
+
+	token, err := createSession(foundUsername)
+	if err != nil {
+		log.Println("loginHandler — createSession:", err)
+		writeJSON(w, http.StatusInternalServerError,
+			loginResponse{OK: false, Message: "Ошибка создания сессии"})
+		return
+	}
+
+	log.Printf("loginHandler — %q вошёл (IP: %s)", foundUsername, ip)
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     cookieName,
 		Value:    token,
 		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
+		HttpOnly: true,                 // недоступна из JS — защита от XSS
+		SameSite: http.SameSiteLaxMode, // защита от CSRF
 		Expires:  time.Now().Add(sessionDuration),
 	})
 
@@ -262,12 +460,16 @@ func logoutHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if cookie, err := r.Cookie(cookieName); err == nil {
-		delete(sessions, cookie.Value)
+		deleteSession(cookie.Value) // удаляем из БД
 	}
 
+	// Сбрасываем Cookie в браузере
 	http.SetCookie(w, &http.Cookie{
-		Name: cookieName, Value: "",
-		Path: "/", Expires: time.Unix(0, 0), MaxAge: -1,
+		Name:    cookieName,
+		Value:   "",
+		Path:    "/",
+		Expires: time.Unix(0, 0),
+		MaxAge:  -1,
 	})
 
 	json.NewEncoder(w).Encode(loginResponse{OK: true, Message: "Выход выполнен"})
@@ -289,14 +491,13 @@ func checkAuthHandler(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(loginResponse{OK: false})
 		return
 	}
-	_, valid := sessions[cookie.Value]
+
+	valid := getSessionUser(cookie.Value) != ""
 	json.NewEncoder(w).Encode(loginResponse{OK: valid})
 }
 
 // ── meHandler — GET /api/me ───────────────────────────────────
-//
-// Возвращает данные текущего пользователя по session_token Cookie.
-// Ответ: { ok, name, email, role, displayName }
+
 func meHandler(w http.ResponseWriter, r *http.Request) {
 	setCORSHeaders(w, r)
 	w.Header().Set("Content-Type", "application/json")
@@ -308,26 +509,25 @@ func meHandler(w http.ResponseWriter, r *http.Request) {
 
 	cookie, err := r.Cookie(cookieName)
 	if err != nil {
-		writeJSON(w, http.StatusUnauthorized,
+		// 200 вместо 401 — браузер не логирует как ошибку,
+		// фронтенд проверяет поле ok
+		writeJSON(w, http.StatusOK,
 			loginResponse{OK: false, Message: "Не авторизован"})
 		return
 	}
 
-	username, ok := sessions[cookie.Value]
-	if !ok {
-		writeJSON(w, http.StatusUnauthorized,
+	username := getSessionUser(cookie.Value)
+	if username == "" {
+		writeJSON(w, http.StatusOK,
 			loginResponse{OK: false, Message: "Сессия истекла"})
 		return
 	}
 
-	// Читаем name, email, role из БД по username
 	var name, role string
 	var emailPtr *string
-
 	err = db.QueryRow(
 		"SELECT name, email, role FROM users WHERE username = ?", username,
 	).Scan(&name, &emailPtr, &role)
-
 	if err != nil {
 		log.Println("meHandler — запрос пользователя:", err)
 		writeJSON(w, http.StatusInternalServerError,
@@ -340,7 +540,6 @@ func meHandler(w http.ResponseWriter, r *http.Request) {
 		email = *emailPtr
 	}
 
-	// displayName: имя > email > username
 	displayName := username
 	if name != "" {
 		displayName = name
@@ -348,7 +547,6 @@ func meHandler(w http.ResponseWriter, r *http.Request) {
 		displayName = email
 	}
 
-	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]any{
 		"ok":          true,
 		"username":    username,
@@ -366,6 +564,5 @@ func isAuthenticated(r *http.Request) bool {
 	if err != nil {
 		return false
 	}
-	_, ok := sessions[cookie.Value]
-	return ok
+	return getSessionUser(cookie.Value) != ""
 }

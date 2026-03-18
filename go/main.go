@@ -14,17 +14,24 @@ func main() {
 
 	prepareDB()
 
-	// ── Публичные маршруты ────────────────────────────────────
+	// Фоновая очистка истёкших сессий раз в час
+	go cleanExpiredSessions()
+
+	// ── API маршруты ──────────────────────────────────────────
 	http.HandleFunc("/api/parts", getParts)
 	http.HandleFunc("/api/login", loginHandler)
 	http.HandleFunc("/api/logout", logoutHandler)
 	http.HandleFunc("/api/check-auth", checkAuthHandler)
 	http.HandleFunc("/api/register", registerHandler)
-	http.HandleFunc("/api/me", meHandler) // GET — данные текущего юзера
-
-	// ── Защищённые маршруты ───────────────────────────────────
+	http.HandleFunc("/api/me", meHandler)
 	http.HandleFunc("/api/parts/add", authMiddleware(addPart))
 
-	log.Println("Сервер запущен на http://localhost:8080")
+	// ── Статика фронтенда ─────────────────────────────────────
+	fs := http.FileServer(http.Dir("../frontend"))
+	http.Handle("/", fs)
+
+	log.Println("Сервер запущен:")
+	log.Println("  Сайт: http://localhost:8080")
+	log.Println("  API:  http://localhost:8080/api/...")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
